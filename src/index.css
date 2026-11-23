@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* bookU brandbook: Blue #1D126D primary, orange/violet/pink/purple secondary, neutral #2F3244, Sora (fallback Verdana). */
+@theme {
+  --font-sans: "Sora Variable", Verdana, sans-serif;
+  --color-brand-blue: #1d126d;
+  --color-brand-blue-soft: #ebe9f4;
+  --color-brand-orange: #ff6600;
+  --color-brand-violet: #758bfd;
+  --color-brand-violet-light: #aeb8fe;
+  --color-brand-purple: #cf9bef;
+  --color-brand-pink: #db2955;
+  --color-brand-neutral: #2f3244;
+  --color-surface: #f4f4f8;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-brand-neutral);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
