@@ -1,5 +1,7 @@
 # bookU Event Companion
 
+**Live:** https://simonbooku.github.io/event-companion/ (team login required)
+
 A phone-first PWA for the bookU team at events:
 - delegate cards with photo, background, recent posts, an opener, and how to talk to them per persona
 - companies grouped by tier (A orange, B violet, C grey, Intel pink), plus search
