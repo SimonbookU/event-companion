@@ -27,9 +27,14 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-input,
-textarea,
-select,
 button {
   font: inherit;
+}
+
+/* iOS Safari zooms into any focused field under 16px and stays zoomed: keep every form control at 16px. */
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: 16px;
 }

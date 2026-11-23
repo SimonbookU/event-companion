@@ -207,7 +207,7 @@ const editableOf = (d: Delegate): Editable => ({
 });
 
 const inputClass =
-  'w-full rounded-2xl border border-brand-neutral/15 bg-surface px-4 py-3 text-[15px] outline-none focus:border-brand-violet';
+  'w-full min-w-0 rounded-2xl border border-brand-neutral/15 bg-surface px-4 py-3 text-base outline-none focus:border-brand-violet';
 
 function NotesForm({ d, agenda }: { d: Delegate; agenda: AgendaItem[] }) {
   const { save } = useStore();

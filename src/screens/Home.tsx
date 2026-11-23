@@ -64,7 +64,7 @@ export function Home() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search a name or company"
             aria-label="Search a name or company"
-            className="w-full bg-transparent text-[15px] outline-none placeholder:text-brand-neutral/45"
+            className="w-full bg-transparent text-base outline-none placeholder:text-brand-neutral/45"
           />
         </label>
       </AppHeader>

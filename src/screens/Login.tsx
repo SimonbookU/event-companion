@@ -3,7 +3,7 @@ import { useStore } from '../store';
 import { supabase } from '../supabase';
 
 const inputClass =
-  'mt-1.5 w-full rounded-2xl border border-brand-neutral/15 bg-surface px-4 py-3 text-[15px] font-normal outline-none focus:border-brand-violet';
+  'mt-1.5 w-full rounded-2xl border border-brand-neutral/15 bg-surface px-4 py-3 text-base font-normal outline-none focus:border-brand-violet';
 
 export function Login() {
   const [email, setEmail] = useState('');
