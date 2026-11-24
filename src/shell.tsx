@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { inPipeline, isOwner, stageOf } from './model';
 import { href } from './router';
 import { useStore } from './store';
 import { dayLabel, nextAgendaItem } from './time';
@@ -94,7 +95,10 @@ const TABS = [
 ];
 
 export function BottomNav({ active }: { active: string }) {
+  const { snapshot, me } = useStore();
   const current = active === 'company' || active === 'person' ? 'home' : active;
+  // Your own contacts still to invite, so a teammate sees their to-do the moment they sign in.
+  const toInvite = (snapshot?.delegates ?? []).filter((d) => isOwner(d, me) && inPipeline(d) && stageOf(d) === 'todo').length;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-brand-neutral/10 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
       <div className="mx-auto flex max-w-xl">
@@ -106,9 +110,17 @@ export function BottomNav({ active }: { active: string }) {
               current === t.key ? 'text-brand-blue' : 'text-brand-neutral/45'
             }`}
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-              {t.icon}
-            </svg>
+            <span className="relative">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                {t.icon}
+              </svg>
+              {t.key === 'coffees' && toInvite > 0 && (
+                <span className="absolute -right-2.5 -top-1.5 min-w-[18px] rounded-full bg-brand-orange px-1 text-center text-[10px] leading-[18px] text-white">
+                  {toInvite}
+                  <span className="sr-only"> to invite</span>
+                </span>
+              )}
+            </span>
             {t.label}
           </a>
         ))}

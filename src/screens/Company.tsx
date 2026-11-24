@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { groupCompanies, hookEntity, segmentLabel, TIERS } from '../model';
 import { useStore } from '../store';
-import { BackBar, Banner, ExternalLink, List, PersonRow, Section, TierBadge } from '../ui';
+import { useTeam } from '../team';
+import { BackBar, Banner, ExternalLink, List, OwnerIcon, PersonRow, Section, TierBadge } from '../ui';
 
 export function CompanyView({ groupKey }: { groupKey: string }) {
   const { snapshot } = useStore();
+  const { nameOf, isMe } = useTeam();
   const group = useMemo(
     () => groupCompanies(snapshot?.delegates ?? []).find((g) => g.key === groupKey),
     [snapshot, groupKey],
@@ -20,6 +22,9 @@ export function CompanyView({ groupKey }: { groupKey: string }) {
 
   const benelux =
     group.benelux === 'yes' ? 'Active in the Benelux' : group.benelux === 'no' ? 'No Benelux entity found' : 'Benelux presence unknown';
+  const owners = [...new Set(group.people.map((p) => p.owner?.toLowerCase()).filter((o): o is string => !!o))].map((o) =>
+    isMe(o) ? 'you' : nameOf(o),
+  );
 
   return (
     <>
@@ -30,6 +35,14 @@ export function CompanyView({ groupKey }: { groupKey: string }) {
           <TierBadge tier={group.tier} large />
           <span className="text-sm text-white/80">{TIERS[group.tier].hint}</span>
         </div>
+        {owners.length > 0 && (
+          <div className="mt-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm">
+              <OwnerIcon size={13} />
+              {owners.length === 1 ? 'Owner' : 'Owners'}: {owners.join(', ')}
+            </span>
+          </div>
+        )}
       </div>
 
       <main className="space-y-3 px-4 pt-4">

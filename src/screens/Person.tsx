@@ -1,13 +1,15 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { companyName, fullName, hookEntity, playbookFor, segmentLabel, tierOf } from '../model';
+import { companyName, fullName, hookEntity, inviteTexts, playbookFor, segmentLabel, tierOf } from '../model';
 import { href } from '../router';
 import { useStore, type SaveResult } from '../store';
+import { useTeam } from '../team';
 import { dayLabel, eventDays, eventTimeToIso, isoToEventTime, meetingLabel } from '../time';
 import type { AgendaItem, Delegate, Editable, Interest, InviteStatus, MeetingStatus } from '../types';
-import { Avatar, BackBar, Banner, Bullets, ExternalLink, Section, TierBadge } from '../ui';
+import { Avatar, BackBar, Banner, Bullets, ExternalLink, OwnerIcon, Section, TierBadge } from '../ui';
 
 export function PersonView({ id }: { id: number }) {
   const { snapshot } = useStore();
+  const { nameOf, isMe, myName } = useTeam();
   const d = snapshot?.delegates.find((x) => x.id === id);
   if (!snapshot || !d) {
     return (
@@ -23,6 +25,14 @@ export function PersonView({ id }: { id: number }) {
   const hasPlay =
     !!play && !!(play.role_in_deal || play.angle || play.proof || play.pains.length || play.questions.length || play.avoid.length);
   const colleagues = snapshot.delegates.filter((x) => x.id !== d.id && companyName(x) === companyName(d));
+  const invited = d.invite === 'yes' || d.invite === 'review';
+  const ownerLabel = d.owner ? `Owner: ${isMe(d.owner) ? 'you' : nameOf(d.owner)}` : invited ? 'No owner yet' : null;
+  // The invite card stays until they reply; after that the coffee itself is planned in the notes below.
+  const texts = invited && !intel ? inviteTexts(d, snapshot.event.outreach, myName || 'bookU') : null;
+  const inviteOpen =
+    !!texts &&
+    ['todo', 'sent', 'accepted', 'dm_sent'].includes(d.invite_status ?? 'todo') &&
+    (d.meeting_status ?? 'none') === 'none';
 
   return (
     <>
@@ -48,6 +58,12 @@ export function PersonView({ id }: { id: number }) {
           <span className="rounded-full bg-white/15 px-3 py-1 text-sm">
             {d.invite === 'yes' ? 'Invite for coffee' : d.invite === 'review' ? 'Check before inviting' : 'No outreach'}
           </span>
+          {ownerLabel && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-sm">
+              <OwnerIcon size={13} />
+              {ownerLabel}
+            </span>
+          )}
         </div>
       </div>
 
@@ -68,6 +84,8 @@ export function PersonView({ id }: { id: number }) {
             Competitor or VMS/MSP. Be friendly and listen; don't pitch or share client or roadmap details.
           </Banner>
         )}
+
+        {inviteOpen && texts && <InviteSection d={d} texts={texts} />}
 
         {d.icebreaker && (
           <Section title="Opener">
@@ -176,6 +194,129 @@ function Sub({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+type InviteTexts = NonNullable<ReturnType<typeof inviteTexts>>;
+
+const NEXT_INVITE_STEP: Partial<Record<InviteStatus, { label: string; value: InviteStatus }>> = {
+  todo: { label: 'I sent the invite', value: 'sent' },
+  sent: { label: 'They accepted', value: 'accepted' },
+  accepted: { label: 'I sent the DM', value: 'dm_sent' },
+  dm_sent: { label: 'They replied', value: 'replied' },
+};
+const INVITE_NOW: Partial<Record<InviteStatus, string>> = {
+  todo: 'Not sent yet',
+  sent: 'Invite sent, waiting for them to accept',
+  accepted: 'Connected: send the DM within 24 hours',
+  dm_sent: 'DM sent, waiting for a reply',
+};
+
+function InviteSection({ d, texts }: { d: Delegate; texts: InviteTexts }) {
+  const { save, me } = useStore();
+  const [result, setResult] = useState<SaveResult | 'saving' | null>(null);
+  const status = d.invite_status ?? 'todo';
+  const next = NEXT_INVITE_STEP[status];
+  const noteLength = [...texts.note].length;
+
+  async function advance() {
+    if (!next) return;
+    setResult('saving');
+    // Whoever sends the invite for someone without an owner takes them on.
+    setResult(await save(d.id, { invite_status: next.value, ...(d.owner || !me ? {} : { owner: me }) }));
+  }
+
+  return (
+    <Section title="LinkedIn invite" action={d.linkedin_url ? <ExternalLink url={d.linkedin_url}>Profile</ExternalLink> : undefined}>
+      <div className="space-y-5">
+        <Step n={1} title="Connection note" done={status !== 'todo'} meta={`${noteLength}/${texts.limit}`}>
+          <Copyable text={texts.note} />
+          {noteLength > texts.freeLimit && (
+            <p className="mt-2 text-xs text-brand-neutral/60">
+              Free LinkedIn accounts allow {texts.freeLimit} characters and only a few notes a month. If it doesn't fit,
+              connect without a note and send the DM once they accept.
+            </p>
+          )}
+        </Step>
+        <Step n={2} title="DM once they accept" done={status === 'dm_sent' || status === 'replied'} muted={status === 'todo' || status === 'sent'}>
+          <Copyable text={texts.dm} />
+        </Step>
+      </div>
+      {next && (
+        <button
+          type="button"
+          disabled={result === 'saving'}
+          onClick={() => void advance()}
+          className="mt-5 w-full rounded-full bg-brand-blue py-3 font-semibold text-white active:opacity-80 disabled:opacity-50"
+        >
+          {next.label}
+        </button>
+      )}
+      <p className="mt-2 text-center text-xs text-brand-neutral/60">
+        {result === 'queued' ? "Saved on this phone. It syncs when you're back online." : INVITE_NOW[status]}
+      </p>
+    </Section>
+  );
+}
+
+function Step({
+  n,
+  title,
+  done,
+  meta,
+  muted = false,
+  children,
+}: {
+  n: number;
+  title: string;
+  done: boolean;
+  meta?: string;
+  muted?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={muted ? 'opacity-60' : undefined}>
+      <div className="mb-2 flex items-center gap-2">
+        <span
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+            done ? 'bg-brand-violet text-white' : 'bg-brand-blue-soft text-brand-blue'
+          }`}
+        >
+          {done ? '✓' : n}
+        </span>
+        <h3 className="flex-1 text-sm font-semibold text-brand-blue">{title}</h3>
+        {meta && <span className="text-xs tabular-nums text-brand-neutral/50">{meta}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Copyable({ text }: { text: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setState('copied');
+      setTimeout(() => setState('idle'), 2000);
+    } catch {
+      setState('failed');
+    }
+  }
+  return (
+    <>
+      <p className="select-all whitespace-pre-line rounded-2xl bg-surface px-4 py-3 text-[15px] leading-relaxed">{text}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void copy()}
+          className="rounded-full border border-brand-neutral/15 bg-white px-4 py-1.5 text-sm font-semibold text-brand-blue active:bg-brand-blue-soft"
+        >
+          {state === 'copied' ? 'Copied' : 'Copy'}
+        </button>
+        {state === 'failed' && <span className="text-xs text-brand-neutral/60">Copy is blocked here: press and hold the text.</span>}
+      </div>
+    </>
+  );
+}
+
 const INVITE_OPTIONS: { value: InviteStatus; label: string }[] = [
   { value: 'todo', label: 'To do' },
   { value: 'sent', label: 'Sent' },
@@ -210,7 +351,12 @@ const inputClass =
   'w-full min-w-0 rounded-2xl border border-brand-neutral/15 bg-surface px-4 py-3 text-base outline-none focus:border-brand-violet';
 
 function NotesForm({ d, agenda }: { d: Delegate; agenda: AgendaItem[] }) {
-  const { save } = useStore();
+  const { save, me } = useStore();
+  const { team, isMe } = useTeam();
+  const ownerOptions = team.map((t) => {
+    const name = t.name ?? t.email;
+    return { value: t.email.toLowerCase(), label: isMe(t.email) ? `${name} (you)` : name };
+  });
   const base = useMemo(() => editableOf(d), [d]);
   // Only the fields you touch are kept locally; everything else follows the latest
   // server values, so saving never overwrites a teammate's change to another field.
@@ -240,7 +386,12 @@ function NotesForm({ d, agenda }: { d: Delegate; agenda: AgendaItem[] }) {
 
   async function onSave() {
     setResult('saving');
-    const outcome = await save(d.id, patch);
+    const out: Partial<Editable> = { ...patch };
+    const startsTalking =
+      (out.invite_status != null && out.invite_status !== 'todo') || (out.meeting_status != null && out.meeting_status !== 'none');
+    // Whoever starts talking to someone without an owner takes them on.
+    if (!form.owner && !('owner' in out) && startsTalking && me) out.owner = me;
+    const outcome = await save(d.id, out);
     setEdits({});
     setResult(outcome);
   }
@@ -259,6 +410,13 @@ function NotesForm({ d, agenda }: { d: Delegate; agenda: AgendaItem[] }) {
   return (
     <Section title="Your notes">
       <div className="space-y-5">
+        {ownerOptions.length > 0 && (
+          <div>
+            <Label>Owner</Label>
+            <Choice value={form.owner?.toLowerCase() ?? null} options={ownerOptions} onChange={(v) => set('owner', v)} />
+          </div>
+        )}
+
         <div>
           <Label>LinkedIn invite</Label>
           <Choice value={form.invite_status} options={INVITE_OPTIONS} onChange={(v) => set('invite_status', v ?? 'todo')} />

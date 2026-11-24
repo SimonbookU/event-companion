@@ -3,7 +3,7 @@ import type { Session } from '@supabase/supabase-js';
 import { clear, createStore, get, set } from 'idb-keyval';
 import { EVENT_ID, PHOTO_BUCKET } from './config';
 import { supabase } from './supabase';
-import type { Delegate, Editable, EventInfo, Playbook, Snapshot } from './types';
+import type { Delegate, Editable, EventInfo, Playbook, Snapshot, TeamMember } from './types';
 
 // Offline-first: the last snapshot, photos and unsynced edits live in IndexedDB, so the
 // app keeps working on bad venue Wi-Fi. Edits sync as soon as the phone is back online.
@@ -29,6 +29,8 @@ export type SaveResult = 'synced' | 'queued';
 interface StoreValue {
   status: Status;
   session: Session | null;
+  /** Signed-in email, lower case: owners are stored as team emails. */
+  me: string;
   snapshot: Snapshot | null;
   photos: Record<string, string>;
   online: boolean;
@@ -118,14 +120,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     if (!navigator.onLine) return;
-    const [ev, dl, pb] = await Promise.all([
+    const [ev, dl, pb, tm] = await Promise.all([
       supabase
         .from('events')
-        .select('id, name, starts_on, ends_on, location, booth, agenda, briefing')
+        .select('id, name, starts_on, ends_on, location, booth, agenda, briefing, outreach')
         .eq('id', EVENT_ID)
         .maybeSingle(),
       supabase.from('event_delegates').select(DELEGATE_COLUMNS).eq('event_id', EVENT_ID).eq('removed_from_list', false),
       supabase.from('persona_playbook').select('persona, label, role_in_deal, pains, angle, questions, proof, avoid'),
+      supabase.from('event_app_users').select('email, name'),
     ]);
     const failure = ev.error ?? dl.error ?? pb.error;
     if (failure) {
@@ -137,10 +140,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setStatus('no-access');
       return;
     }
+    // The team list only labels owners, so a failed read keeps the last known list.
+    const cachedTeam = (await get<Snapshot>(SNAPSHOT_KEY, cache))?.team ?? [];
     const next: Snapshot = {
       event: ev.data as EventInfo,
       delegates: withQueue(dl.data as unknown as Delegate[], await readQueue()),
       playbook: (pb.data ?? []) as Playbook[],
+      team: tm.error ? cachedTeam : ((tm.data ?? []) as TeamMember[]),
       fetchedAt: new Date().toISOString(),
     };
     await set(SNAPSHOT_KEY, next, cache);
@@ -240,6 +246,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value: StoreValue = {
     status,
     session,
+    me: session?.user.email?.toLowerCase() ?? '',
     snapshot,
     photos,
     online,

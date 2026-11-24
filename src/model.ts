@@ -1,4 +1,4 @@
-import type { Delegate, Playbook, Tier } from './types';
+import type { Delegate, Outreach, Playbook, Tier } from './types';
 
 export const TIER_ORDER: Tier[] = ['A', 'B', 'TBD', 'C', 'X_INTEL'];
 
@@ -83,6 +83,57 @@ export const personMatches = (d: Delegate, q: string) =>
 
 export const byTierThenName = (a: Delegate, b: Delegate) =>
   tierRank(tierOf(a)) - tierRank(tierOf(b)) || fullName(a).localeCompare(fullName(b));
+
+/** Owners are team emails; `email` is expected in lower case. */
+export const isOwner = (d: Delegate, email: string) => !!email && d.owner?.toLowerCase() === email;
+
+export type Stage = 'todo' | 'check' | 'invited' | 'accepted' | 'booked' | 'met' | 'declined';
+
+/** Where a contact is in the coffee pipeline, from the LinkedIn invite and coffee status. */
+export function stageOf(d: Delegate): Stage {
+  if (d.meeting_status === 'met' || d.meeting_status === 'no_show') return 'met';
+  if (d.meeting_status === 'booked') return 'booked';
+  switch (d.invite_status) {
+    case 'declined':
+      return 'declined';
+    case 'accepted':
+    case 'dm_sent':
+    case 'replied':
+      return 'accepted';
+    case 'sent':
+      return 'invited';
+    default:
+      return d.invite === 'review' ? 'check' : 'todo';
+  }
+}
+
+/** On the coffee lists: everyone we invite, plus anyone a teammate has started talking to. */
+export const inPipeline = (d: Delegate) => d.invite === 'yes' || d.invite === 'review' || stageOf(d) !== 'todo';
+
+const COUNTRY_SHORT: Record<string, string> = { 'United Kingdom': 'UK', 'United States': 'US', USA: 'US' };
+
+/** The LinkedIn connection note and follow-up DM for this person, signed by whoever sends them. */
+export function inviteTexts(d: Delegate, outreach: Outreach | null | undefined, sender: string) {
+  if (!outreach) return null;
+  const persona = personaOf(d);
+  const company = companyName(d);
+  const country = d.country ? (COUNTRY_SHORT[d.country] ?? d.country) : '';
+  const vars: Record<string, string> = {
+    first: nice(d.first_name) || 'there',
+    company,
+    company_local: [company, country].filter(Boolean).join(' '),
+    be_entity: d.warm_hook ? hookEntity(d.warm_hook) : company,
+    pain: outreach.pains?.[persona] ?? outreach.pains?.EXECUTIVE_SPONSOR ?? '',
+    sender,
+  };
+  const fill = (template: string | undefined) => (template ?? '').replace(/\{(\w+)\}/g, (m, k: string) => vars[k] ?? m);
+  // Warm-hook delegates (Randstad, Manpower, Synergie) always get the Belgian-opener version.
+  const warm = !!d.warm_hook;
+  const note = fill(warm ? outreach.note_warm : (outreach.notes?.[persona] ?? outreach.notes?.EXECUTIVE_SPONSOR));
+  const dm = fill(warm ? outreach.dm_warm : outreach.dm);
+  if (!note && !dm) return null;
+  return { note, dm, limit: outreach.note_limit ?? 300, freeLimit: outreach.note_limit_free ?? 200 };
+}
 
 export interface CompanyGroup {
   key: string;

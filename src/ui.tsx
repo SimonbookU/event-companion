@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { companyName, fullName, TIERS, tierOf } from './model';
 import { href } from './router';
 import { useStore } from './store';
+import { useTeam } from './team';
 import { meetingLabel } from './time';
 import type { Delegate, Tier } from './types';
 
@@ -63,7 +64,15 @@ export function Banner({ tone, title, children }: { tone: keyof typeof BANNER_TO
   );
 }
 
-export function PersonRow({ d, showCompany = true }: { d: Delegate; showCompany?: boolean }) {
+export function PersonRow({
+  d,
+  showCompany = true,
+  showOwner = true,
+}: {
+  d: Delegate;
+  showCompany?: boolean;
+  showOwner?: boolean;
+}) {
   return (
     <a href={href.person(d.id)} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-sm active:bg-brand-blue-soft">
       <Avatar d={d} size={46} />
@@ -72,28 +81,48 @@ export function PersonRow({ d, showCompany = true }: { d: Delegate; showCompany?
         <div className="truncate text-sm text-brand-neutral/60">
           {[d.title, showCompany ? companyName(d) : null].filter(Boolean).join(' · ')}
         </div>
-        <PersonStatus d={d} />
+        <PersonStatus d={d} showOwner={showOwner} />
       </div>
       <TierBadge tier={tierOf(d)} />
     </a>
   );
 }
 
-function PersonStatus({ d }: { d: Delegate }) {
-  const bits: { text: string; tone: string }[] = [];
+function PersonStatus({ d, showOwner }: { d: Delegate; showOwner: boolean }) {
+  const { nameOf, isMe } = useTeam();
+  const bits: { text: string; tone: string; owner?: boolean }[] = [];
   if (d.meeting_status === 'booked' && d.meeting_at) bits.push({ text: `Coffee ${meetingLabel(d.meeting_at)}`, tone: 'bg-brand-blue text-white' });
   if (d.meeting_status === 'met') bits.push({ text: 'Met', tone: 'bg-brand-violet/20 text-brand-blue' });
+  if (d.meeting_status === 'no_show') bits.push({ text: 'No-show', tone: 'bg-brand-neutral/10 text-brand-neutral/70' });
   if (d.invite === 'review') bits.push({ text: 'Check first', tone: 'bg-brand-orange/15 text-brand-orange' });
   if (d.warm_hook) bits.push({ text: 'BE opener', tone: 'bg-brand-purple/30 text-brand-blue' });
+  if (showOwner && d.owner) {
+    bits.push({ text: isMe(d.owner) ? 'You' : nameOf(d.owner), tone: 'bg-brand-blue-soft text-brand-blue', owner: true });
+  }
   if (!bits.length) return null;
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {bits.map((b) => (
-        <span key={b.text} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.tone}`}>
+        <span
+          key={b.text}
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.tone}`}
+          title={b.owner ? 'Owner' : undefined}
+        >
+          {b.owner && <OwnerIcon />}
+          {b.owner && <span className="sr-only">Owner:</span>}
           {b.text}
         </span>
       ))}
     </div>
+  );
+}
+
+export function OwnerIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+    </svg>
   );
 }
 

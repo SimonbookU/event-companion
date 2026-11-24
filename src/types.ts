@@ -61,6 +61,17 @@ export interface AgendaItem {
   kind: 'networking' | 'booku' | 'intel';
 }
 
+/** LinkedIn invite templates per event. Placeholders: {first} {company} {company_local} {be_entity} {pain} {sender}. */
+export interface Outreach {
+  note_limit?: number;
+  note_limit_free?: number;
+  notes?: Record<string, string>;
+  note_warm?: string;
+  dm?: string;
+  dm_warm?: string;
+  pains?: Record<string, string>;
+}
+
 export interface EventInfo {
   id: string;
   name: string;
@@ -70,6 +81,12 @@ export interface EventInfo {
   booth: string | null;
   agenda: AgendaItem[] | null;
   briefing: string[] | null;
+  outreach?: Outreach | null;
+}
+
+export interface TeamMember {
+  email: string;
+  name: string | null;
 }
 
 export interface Playbook {
@@ -87,5 +104,7 @@ export interface Snapshot {
   event: EventInfo;
   delegates: Delegate[];
   playbook: Playbook[];
+  /** Missing in snapshots cached by older app versions. */
+  team?: TeamMember[];
   fetchedAt: string;
 }
